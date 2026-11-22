@@ -2,10 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Session } from '@supabase/supabase-js'
 import { supabase, type Family, type Member } from './supabase'
 
-type Status = 'loading' | 'noFamily' | 'ready' | 'error'
+type Status = 'loading' | 'noFamily' | 'ready' | 'error' | 'offline'
 
 type Ctx = {
   status: Status
+  errorDetail: string
   family: Family | null
   me: Member | null
   members: Member[]
@@ -13,6 +14,7 @@ type Ctx = {
   joinFamily: (p: { code: string; name: string; emoji: string }) => Promise<void>
   updateProfile: (p: { name: string; emoji: string }) => Promise<void>
   rotateCode: () => Promise<void>
+  updateFamily: (p: Partial<Pick<Family, 'name' | 'dog_name' | 'double_feed_hours'>>) => Promise<void>
   leaveFamily: () => Promise<void>
   retry: () => void
 }
@@ -33,6 +35,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [family, setFamily] = useState<Family | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [reloadKey, setReloadKey] = useState(0)
+  const [errorDetail, setErrorDetail] = useState('')
+
+  const fail = useCallback((e: { message?: string; code?: string } | null) => {
+    const detail = [e?.code, e?.message].filter(Boolean).join(' · ')
+    setErrorDetail(detail)
+    setStatus(!navigator.onLine || /failed to fetch|load failed|network/i.test(detail) ? 'offline' : 'error')
+  }, [])
 
   const load = useCallback(async () => {
     const { data } = await supabase.auth.getSession()
@@ -41,18 +50,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!uid) { setFamily(null); setMembers([]); setStatus('noFamily'); return }
 
     const { data: mine, error } = await supabase.from('members').select('family_id').eq('user_id', uid).maybeSingle()
-    if (error) { setStatus('error'); return }
+    if (error) { fail(error); return }
     if (!mine) { setFamily(null); setMembers([]); setStatus('noFamily'); return }
 
     const [fam, mem] = await Promise.all([
-      supabase.from('families').select('id,name,dog_name,join_code').eq('id', mine.family_id).single(),
+      supabase.from('families').select('id,name,dog_name,join_code,double_feed_hours').eq('id', mine.family_id).single(),
       supabase.from('members').select('*').eq('family_id', mine.family_id).order('created_at'),
     ])
-    if (fam.error || mem.error) { setStatus('error'); return }
+    if (fam.error || mem.error) { fail(fam.error ?? mem.error); return }
     setFamily(fam.data)
     setMembers(mem.data)
     setStatus('ready')
-  }, [])
+  }, [fail])
 
   useEffect(() => { void load() }, [load, reloadKey])
 
@@ -65,9 +74,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         void supabase.from('members').select('*').eq('family_id', family.id).order('created_at')
           .then(({ data }) => { if (data) setMembers(data) })
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'families', filter: `id=eq.${family.id}` }, (p) => {
+        setFamily((f) => (f ? { ...f, ...(p.new as Partial<Family>) } : f))
+      })
       .subscribe()
     return () => { void supabase.removeChannel(ch) }
-  }, [family])
+  }, [family?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Beim Zurückkehren in die App frisch laden (Handy war im Standby)
   useEffect(() => {
@@ -78,6 +90,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     status,
+    errorDetail,
     family,
     me: members.find((m) => m.user_id === userId) ?? null,
     members,
@@ -106,6 +119,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (error) throw error
       await load()
     },
+    async updateFamily(patch) {
+      if (!family) return
+      const { error } = await supabase.from('families').update(patch).eq('id', family.id)
+      if (error) throw error
+      setFamily({ ...family, ...patch })
+    },
     async leaveFamily() {
       if (!userId) return
       const { error } = await supabase.from('members').delete().eq('user_id', userId)
@@ -113,7 +132,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await load()
     },
     retry: () => { setStatus('loading'); setReloadKey((k) => k + 1) },
-  }), [status, family, members, userId, load])
+  }), [status, errorDetail, family, members, userId, load])
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

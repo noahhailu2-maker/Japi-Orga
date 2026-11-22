@@ -18,7 +18,8 @@ PWA (React + Vite + TypeScript + Tailwind), Hosting auf Vercel, Daten in Supabas
 3. **Authentication → Sign In / Providers** → **Allow anonymous sign-ins** einschalten → Speichern.
 4. **SQL Editor** → **New query** → den ganzen Inhalt von
    [`supabase/migrations/0001_family.sql`](supabase/migrations/0001_family.sql) einfügen → **Run**.
-   Es sollte „Success. No rows returned" erscheinen.
+   Es sollte „Success" erscheinen. Danach genauso `0002_grants.sql` und `0003_checklist.sql`
+   (immer der Reihe nach, jede Datei nur einmal).
 5. **Project Settings → API** (bzw. **Data API / API Keys**): die **Project URL** und den
    **anon / publishable key** kopieren. Den *service_role / secret key* niemals verwenden.
 
@@ -56,7 +57,7 @@ npm run dev
 
 ## Fahrplan
 1. ✅ Grundgerüst + Familien-Login
-2. Live-Checkliste + Verlauf (Futter, Gassi, Spielen, eigene Aufgaben, Doppelt-Füttern-Warnung, 10 s Rückgängig)
+2. ✅ Live-Checkliste + Verlauf (Futter, Gassi, Spielen, eigene Aufgaben, Doppelt-Füttern-Warnung, 10 s Rückgängig)
 3. NFC-Sticker (Kühlschrank = Futter, Flur = Gassi) mit Gedrückt-halten-Bestätigung
 4. Push-Erinnerungen (pg_cron + Edge Function, Web Push)
 5. Extras
