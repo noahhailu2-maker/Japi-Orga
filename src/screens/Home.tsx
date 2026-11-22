@@ -110,7 +110,7 @@ export function Home() {
       <main className="mt-6 flex flex-1 flex-col gap-6">
         <section>
           <div className="mb-3 flex items-end gap-3">
-            <Japi size={60} background={false} mood={allDone ? 'happy' : 'idle'} className="-mb-1 shrink-0" />
+            <Japi size={52} mood={allDone ? 'happy' : 'idle'} className="shrink-0 ring-2 ring-card" />
             <div className="min-w-0">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Heute für {dog}</h2>
               <p className="truncate text-[15px] font-medium">{allDone ? `Alles erledigt, ${dog} ist glücklich!` : `${openCount} ${openCount === 1 ? 'Sache' : 'Sachen'} noch offen`}</p>
