@@ -104,5 +104,5 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
 }
 
 export function PawLogo({ size = 72 }: { size?: number }) {
-  return <Japi size={size} className="rounded-[22%] shadow-lg shadow-accent/25" />
+  return <Japi size={size} rounded="icon" className="shadow-lg shadow-accent/25" />
 }
