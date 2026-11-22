@@ -61,3 +61,7 @@ button, a, input { touch-action: manipulation; }
 .animate-sheet { animation: sheet-in .28s cubic-bezier(.2,.8,.2,1); }
 .animate-fade { animation: fade-in .2s ease-out; }
 @media (prefers-reduced-motion: reduce) { .animate-sheet, .animate-fade { animation: none; } }
+
+@keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(.94); } 100% { transform: scale(1); } }
+.animate-pop { animation: pop .25s ease-out; }

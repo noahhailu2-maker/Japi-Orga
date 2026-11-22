@@ -9,13 +9,16 @@ export function Loading() {
   )
 }
 
-export function LoadError({ onRetry }: { onRetry: () => void }) {
+export function LoadError({ onRetry, offline, detail }: { onRetry: () => void; offline: boolean; detail: string }) {
   return (
     <Screen className="justify-center gap-6 text-center">
       <div>
-        <p className="text-5xl">📡</p>
-        <h1 className="mt-4 text-2xl font-bold">Keine Verbindung</h1>
-        <p className="mt-2 text-muted">Bitte prüfe dein Internet und versuche es nochmal.</p>
+        <p className="text-5xl">{offline ? '📡' : '🛠️'}</p>
+        <h1 className="mt-4 text-2xl font-bold">{offline ? 'Keine Verbindung' : 'Da klemmt etwas'}</h1>
+        <p className="mt-2 text-muted">
+          {offline ? 'Bitte prüfe dein Internet und versuche es nochmal.' : 'Die App konnte die Daten nicht laden. Das liegt nicht an deinem Handy.'}
+        </p>
+        {!offline && detail && <p className="mt-4 break-words font-mono text-xs text-muted/80">{detail}</p>}
       </div>
       <Button onClick={onRetry}>Nochmal versuchen</Button>
     </Screen>
