@@ -44,7 +44,7 @@ export function Settings() {
                   <span className="text-2xl">{t.emoji}</span>
                   <span className="min-w-0">
                     <span className="block truncate text-[17px] font-medium">{t.name}</span>
-                    <span className="block text-sm text-muted">{t.times_per_day === 0 ? 'Nach Bedarf' : `${t.times_per_day}× am Tag`}</span>
+                    <span className="block truncate text-sm text-muted">{t.times_per_day === 0 ? 'Nach Bedarf' : `${t.times_per_day}× am Tag`}{t.options.length > 0 ? ` · ${t.options.join(', ')}` : ''}</span>
                   </span>
                 </button>
                 <IconBtn label="Nach oben" disabled={i === 0} onClick={() => move(i, -1)}>↑</IconBtn>
@@ -158,6 +158,13 @@ function TaskForm({ task, onClose }: { task: Task | null; onClose: () => void })
   const [name, setName] = useState(task?.name ?? '')
   const [emoji, setEmoji] = useState(task?.emoji ?? '🐾')
   const [times, setTimes] = useState(task?.times_per_day ?? 1)
+  const [options, setOptions] = useState<string[]>(task?.options ?? [])
+  const [newOpt, setNewOpt] = useState('')
+  const addOpt = () => {
+    const o = newOpt.trim().slice(0, 40)
+    if (o && !options.includes(o) && options.length < 8) setOptions([...options, o])
+    setNewOpt('')
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -166,8 +173,9 @@ function TaskForm({ task, onClose }: { task: Task | null; onClose: () => void })
     if (!name.trim()) return
     setBusy(true); setError('')
     try {
-      if (task) await updateTask(task.id, { name: name.trim(), emoji, times_per_day: times })
-      else await addTask({ name: name.trim(), emoji, times_per_day: times })
+      const opts = newOpt.trim() && !options.includes(newOpt.trim()) ? [...options, newOpt.trim().slice(0, 40)] : options
+      if (task) await updateTask(task.id, { name: name.trim(), emoji, times_per_day: times, options: opts })
+      else await addTask({ name: name.trim(), emoji, times_per_day: times, options: opts })
       onClose()
     } catch (err) { setError(friendlyError(err)); setBusy(false) }
   }
@@ -189,6 +197,26 @@ function TaskForm({ task, onClose }: { task: Task | null; onClose: () => void })
       <div>
         <span className="mb-2 block text-sm font-medium text-muted">Wie oft am Tag?</span>
         <Stepper value={times} onChange={setTimes} min={0} max={12} format={(v) => (v === 0 ? 'Nach Bedarf' : `${v}×`)} />
+      </div>
+      <div>
+        <span className="mb-1 block text-sm font-medium text-muted">Auswahl beim Eintragen (optional)</span>
+        <span className="mb-2 block text-sm text-muted/80">Zum Beispiel „Ganze Portion“ und „Halbe Portion“. Ohne Auswahl wird sofort eingetragen.</span>
+        <div className="flex flex-wrap gap-2">
+          {options.map((o) => (
+            <span key={o} className="flex items-center gap-1 rounded-full bg-accent-soft py-1.5 pl-3.5 pr-1.5 text-[15px] font-medium">
+              {o}
+              <button type="button" onClick={() => setOptions(options.filter((x) => x !== o))} className="flex size-6 items-center justify-center rounded-full text-muted active:bg-card" aria-label={`${o} entfernen`}>✕</button>
+            </span>
+          ))}
+        </div>
+        {options.length < 8 && (
+          <div className="mt-2 flex gap-2">
+            <input value={newOpt} maxLength={40} placeholder="Neue Auswahl" onChange={(e) => setNewOpt(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOpt() } }}
+              className="h-12 min-w-0 flex-1 rounded-2xl border border-line bg-card px-4 text-[16px] outline-none focus:border-accent" />
+            <button type="button" onClick={addOpt} disabled={!newOpt.trim()} className="h-12 rounded-2xl bg-bg px-4 font-semibold text-accent disabled:opacity-40">Hinzufügen</button>
+          </div>
+        )}
       </div>
       <ErrorText>{error}</ErrorText>
       <Button type="submit" loading={busy} disabled={!name.trim()}>Speichern</Button>

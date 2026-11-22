@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
 import { EMOJIS } from '../lib/platform'
+import { Japi } from './Japi'
 
 export function Screen({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
@@ -103,5 +104,5 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
 }
 
 export function PawLogo({ size = 72 }: { size?: number }) {
-  return <img src="/favicon.svg" width={size} height={size} alt="" className="rounded-[22%] shadow-lg shadow-accent/25" />
+  return <Japi size={size} className="rounded-[22%] shadow-lg shadow-accent/25" />
 }
