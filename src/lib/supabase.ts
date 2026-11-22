@@ -11,8 +11,9 @@ export const supabase = createClient(url ?? 'http://localhost', key ?? 'missing'
 
 export type Family = { id: string; name: string; dog_name: string; join_code: string; double_feed_hours: number }
 export type TaskKind = 'futter' | 'gassi' | 'spielen' | 'custom'
-export type Task = { id: string; family_id: string; kind: TaskKind; name: string; emoji: string; times_per_day: number; sort: number; archived: boolean; created_at: string }
-export type Log = { id: string; family_id: string; task_id: string; member_id: string | null; source: 'app' | 'nfc'; done_at: string }
+export type Task = { id: string; family_id: string; kind: TaskKind; name: string; emoji: string; times_per_day: number; sort: number; archived: boolean; options: string[]; created_at: string }
+export type Log = { id: string; family_id: string; task_id: string; member_id: string | null; source: 'app' | 'nfc'; done_at: string; choice: string | null; note: string | null }
+export type Message = { id: string; family_id: string; member_id: string | null; body: string; created_at: string }
 export type Member = { id: string; family_id: string; user_id: string; display_name: string; emoji: string; created_at: string }
 
 export function friendlyError(e: unknown): string {

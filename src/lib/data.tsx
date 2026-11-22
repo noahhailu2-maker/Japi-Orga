@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { supabase, type Log, type Task } from './supabase'
+import { supabase, type Log, type Message, type Task } from './supabase'
 import { useSession } from './session'
 import { addDays, startOfDay } from './time'
 
@@ -10,10 +10,16 @@ type Ctx = {
   tasks: Task[]          // aktive, sortiert
   allTasks: Task[]       // inkl. archivierter (für Verlauf)
   logs: Log[]            // letzte 7 Tage, neueste zuerst
-  logTask: (taskId: string) => Promise<Log>
+  logTask: (taskId: string, extra?: { choice?: string | null; note?: string | null }) => Promise<Log>
+  updateLog: (logId: string, patch: { choice?: string | null; note?: string | null }) => Promise<void>
   removeLog: (logId: string) => Promise<void>
-  addTask: (t: Pick<Task, 'name' | 'emoji' | 'times_per_day'>) => Promise<void>
-  updateTask: (id: string, patch: Partial<Pick<Task, 'name' | 'emoji' | 'times_per_day' | 'sort' | 'archived'>>) => Promise<void>
+  addTask: (t: Pick<Task, 'name' | 'emoji' | 'times_per_day' | 'options'>) => Promise<void>
+  updateTask: (id: string, patch: Partial<Pick<Task, 'name' | 'emoji' | 'times_per_day' | 'sort' | 'archived' | 'options'>>) => Promise<void>
+  messages: Message[]   // älteste zuerst
+  unread: number
+  markChatSeen: () => void
+  sendMessage: (body: string) => Promise<void>
+  deleteMessage: (id: string) => Promise<void>
 }
 
 const DataContext = createContext<Ctx | null>(null)
@@ -25,14 +31,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<Log[]>([])
   const [loaded, setLoaded] = useState(false)
   const pending = useRef<Set<string>>(new Set()) // gelöschte IDs, bis der Server es bestätigt
+  const [messages, setMessages] = useState<Message[]>([])
+  const [seenAt, setSeenAt] = useState(() => {
+    try { return localStorage.getItem('japi-chat-seen') ?? '' } catch { return '' }
+  })
+  const { me } = useSession()
 
   const refresh = useCallback(async () => {
     if (!familyId) return
     const since = addDays(startOfDay(), -(HISTORY_DAYS - 1)).toISOString()
-    const [t, l] = await Promise.all([
+    const [t, l, m] = await Promise.all([
       supabase.from('tasks').select('*').eq('family_id', familyId).order('sort').order('created_at'),
       supabase.from('logs').select('*').eq('family_id', familyId).gte('done_at', since).order('done_at', { ascending: false }),
+      supabase.from('messages').select('*').eq('family_id', familyId).order('created_at', { ascending: false }).limit(200),
     ])
+    if (m.data) setMessages(m.data.reverse())
     if (t.data) setAllTasks(t.data)
     if (l.data) setLogs(l.data.filter((x) => !pending.current.has(x.id)))
     setLoaded(true)
@@ -49,6 +62,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .channel(`data:${familyId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'logs', filter: `family_id=eq.${familyId}` }, soon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `family_id=eq.${familyId}` }, soon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `family_id=eq.${familyId}` }, soon)
       .subscribe()
     const onVis = () => { if (document.visibilityState === 'visible') void refresh() }
     document.addEventListener('visibilitychange', onVis)
@@ -66,12 +80,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     allTasks,
     tasks: allTasks.filter((t) => !t.archived),
     logs,
-    async logTask(taskId) {
-      const { data, error } = await supabase.rpc('log_task', { p_task_id: taskId })
+    async logTask(taskId, extra) {
+      const { data, error } = await supabase.rpc('log_task', { p_task_id: taskId, p_choice: extra?.choice ?? null, p_note: extra?.note ?? null })
       if (error) throw error
       const log = data as Log
       setLogs((ls) => (ls.some((l) => l.id === log.id) ? ls : [log, ...ls]))
       return log
+    },
+    async updateLog(logId, patch) {
+      setLogs((ls) => ls.map((l) => (l.id === logId ? { ...l, ...patch } : l)))
+      const { error } = await supabase.from('logs').update(patch).eq('id', logId)
+      if (error) { void refresh(); throw error }
     },
     async removeLog(logId) {
       pending.current.add(logId)
@@ -80,10 +99,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       pending.current.delete(logId)
       if (error) { void refresh(); throw error }
     },
-    async addTask({ name, emoji, times_per_day }) {
+    async addTask({ name, emoji, times_per_day, options }) {
       if (!familyId) return
       const sort = Math.max(0, ...allTasks.map((t) => t.sort)) + 10
-      const { error } = await supabase.from('tasks').insert({ family_id: familyId, name, emoji, times_per_day, sort, kind: 'custom' })
+      const { error } = await supabase.from('tasks').insert({ family_id: familyId, name, emoji, times_per_day, sort, options, kind: 'custom' })
       if (error) throw error
       await refresh()
     },
@@ -92,7 +111,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('tasks').update(patch).eq('id', id)
       if (error) { void refresh(); throw error }
     },
-  }), [loaded, allTasks, logs, familyId, refresh])
+    messages,
+    unread: messages.filter((m) => m.created_at > seenAt && m.member_id !== me?.id).length,
+    markChatSeen() {
+      const last = messages[messages.length - 1]?.created_at ?? new Date().toISOString()
+      if (last <= seenAt) return
+      setSeenAt(last)
+      try { localStorage.setItem('japi-chat-seen', last) } catch { /* egal */ }
+    },
+    async sendMessage(body) {
+      const { data, error } = await supabase.from('messages').insert({ body }).select().single()
+      if (error) throw error
+      setMessages((ms) => (ms.some((m) => m.id === data.id) ? ms : [...ms, data]))
+    },
+    async deleteMessage(id) {
+      setMessages((ms) => ms.filter((m) => m.id !== id))
+      const { error } = await supabase.from('messages').delete().eq('id', id)
+      if (error) { void refresh(); throw error }
+    },
+  }), [loaded, allTasks, logs, familyId, refresh, messages, seenAt, me?.id])
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

@@ -3,11 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, Screen, Sheet, Spinner } from '../components/ui'
 import { InstallHint } from '../components/InstallHint'
 import { TaskCard } from '../components/TaskCard'
+import { Japi } from '../components/Japi'
 import { UndoToast, type ToastData } from '../components/UndoToast'
 import { LogRow } from '../components/LogRow'
+import { ChoiceSheet, LogEditSheet } from '../components/LogSheets'
 import { useSession } from '../lib/session'
 import { useData } from '../lib/data'
-import { friendlyError, type Log, type Task } from '../lib/supabase'
+import { friendlyError, type Log, type Message, type Task } from '../lib/supabase'
 import { vibrate } from '../lib/platform'
 import { ago, clock, startOfDay } from '../lib/time'
 import { InviteSheet } from './InviteSheet'
@@ -22,7 +24,7 @@ function greeting() {
 
 export function Home() {
   const { family, me, members } = useSession()
-  const { tasks, logs, loaded, logTask, removeLog } = useData()
+  const { tasks, logs, loaded, logTask, removeLog, messages, unread } = useData()
   const nav = useNavigate()
   const [params, setParams] = useSearchParams()
   const inviteOpen = params.get('einladen') === '1'
@@ -31,22 +33,29 @@ export function Home() {
   const [toast, setToast] = useState<ToastData | null>(null)
   const [confirm, setConfirm] = useState<{ task: Task; last: Log } | null>(null)
   const [busyTask, setBusyTask] = useState<string | null>(null)
+  const [choosing, setChoosing] = useState<Task | null>(null)
+  const [editLog, setEditLog] = useState<Log | null>(null)
   const clearToast = useCallback(() => setToast(null), [])
 
   const todayStart = startOfDay().getTime()
   const todayLogs = useMemo(() => logs.filter((l) => new Date(l.done_at).getTime() >= todayStart), [logs, todayStart])
 
+  const goals = tasks.filter((t) => t.times_per_day > 0)
+  const openCount = goals.reduce((n, t) => n + Math.max(0, t.times_per_day - todayLogs.filter((l) => l.task_id === t.id).length), 0)
+  const allDone = loaded && goals.length > 0 && openCount === 0
+
   if (!family || !me) return null
   const dog = family.dog_name
 
-  const doLog = async (task: Task) => {
+  const doLog = async (task: Task, extra?: { choice: string | null; note: string | null }) => {
     setBusyTask(task.id)
     try {
-      const log = await logTask(task.id)
+      const log = await logTask(task.id, extra)
       vibrate(20)
       setToast({
         id: log.id,
-        text: `${task.emoji} ${task.name} eingetragen`,
+        text: `${task.emoji} Eingetragen`,
+        onNote: () => setEditLog(log),
         onUndo: () => { void removeLog(log.id).catch((e) => setToast({ id: 'err', text: friendlyError(e) })) },
       })
     } catch (e) {
@@ -65,7 +74,12 @@ export function Home() {
         return
       }
     }
-    void doLog(task)
+    proceed(task)
+  }
+
+  const proceed = (task: Task) => {
+    if (task.options.length > 0) setChoosing(task)
+    else void doLog(task)
   }
 
   const lastFeeder = confirm ? members.find((m) => m.id === confirm.last.member_id) : undefined
@@ -95,7 +109,13 @@ export function Home() {
 
       <main className="mt-6 flex flex-1 flex-col gap-6">
         <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Heute für {dog}</h2>
+          <div className="mb-3 flex items-end gap-3">
+            <Japi size={60} background={false} mood={allDone ? 'happy' : 'idle'} className="-mb-1 shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Heute für {dog}</h2>
+              <p className="truncate text-[15px] font-medium">{allDone ? `Alles erledigt, ${dog} ist glücklich!` : `${openCount} ${openCount === 1 ? 'Sache' : 'Sachen'} noch offen`}</p>
+            </div>
+          </div>
           {!loaded ? (
             <div className="flex justify-center py-10 text-muted"><Spinner /></div>
           ) : (
@@ -119,6 +139,8 @@ export function Home() {
           )}
         </section>
 
+        <ChatCard messages={messages} unread={unread} onOpen={() => nav('/chat')} />
+
         {members.length < 2 && (
           <button
             onClick={() => setInviteOpen(true)}
@@ -141,7 +163,7 @@ export function Home() {
             <p className="py-4 text-[15px] text-muted">Heute wurde noch nichts eingetragen.</p>
           ) : (
             <ul className="divide-y divide-line rounded-3xl border border-line bg-card px-4">
-              {todayLogs.slice(0, 8).map((l) => <LogRow key={l.id} log={l} />)}
+              {todayLogs.slice(0, 8).map((l) => <LogRow key={l.id} log={l} onOpen={() => setEditLog(l)} />)}
             </ul>
           )}
         </section>
@@ -161,16 +183,41 @@ export function Home() {
             </div>
             <p className="text-[15px] text-muted">Wirklich nochmal füttern?</p>
             <Button onClick={() => setConfirm(null)}>Doch nicht</Button>
-            <Button variant="secondary" onClick={() => { const t = confirm.task; setConfirm(null); void doLog(t) }}>
+            <Button variant="secondary" onClick={() => { const t = confirm.task; setConfirm(null); proceed(t) }}>
               Trotzdem eintragen
             </Button>
           </div>
         )}
       </Sheet>
 
+      <ChoiceSheet task={choosing} onClose={() => setChoosing(null)} onLog={(extra) => { const t = choosing!; setChoosing(null); void doLog(t, extra) }} />
+      <LogEditSheet log={editLog} onClose={() => setEditLog(null)} />
       <UndoToast toast={toast} onDone={clearToast} />
       <InviteSheet open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <ProfileSheet open={profileOpen} onClose={() => setProfileOpen(false)} />
     </Screen>
+  )
+}
+
+function ChatCard({ messages, unread, onOpen }: { messages: Message[]; unread: number; onOpen: () => void }) {
+  const { members } = useSession()
+  const last = messages[messages.length - 1]
+  const who = last ? members.find((m) => m.id === last.member_id) : undefined
+  return (
+    <button onClick={onOpen} className="flex items-center gap-4 rounded-3xl border border-line bg-card p-4 text-left active:scale-[0.98]">
+      <span className="relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-bg text-[28px]">
+        💬
+        {unread > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1.5 text-[13px] font-bold text-accent-ink">{unread}</span>
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[19px] font-bold">Familien-Chat</span>
+        <span className="block truncate text-[15px] text-muted">
+          {last ? <>{who ? `${who.emoji} ${who.display_name}: ` : ''}{last.body}</> : 'Nachricht für alle hinterlassen'}
+        </span>
+      </span>
+      <span className="text-xl text-muted" aria-hidden>›</span>
+    </button>
   )
 }

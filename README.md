@@ -18,7 +18,7 @@ PWA (React + Vite + TypeScript + Tailwind), Hosting auf Vercel, Daten in Supabas
 3. **Authentication → Sign In / Providers** → **Allow anonymous sign-ins** einschalten → Speichern.
 4. **SQL Editor** → **New query** → den ganzen Inhalt von
    [`supabase/migrations/0001_family.sql`](supabase/migrations/0001_family.sql) einfügen → **Run**.
-   Es sollte „Success" erscheinen. Danach genauso `0002_grants.sql` und `0003_checklist.sql`
+   Es sollte „Success" erscheinen. Danach genauso `0002_grants.sql`, `0003_checklist.sql` und `0004_notes_chat.sql`
    (immer der Reihe nach, jede Datei nur einmal).
 5. **Project Settings → API** (bzw. **Data API / API Keys**): die **Project URL** und den
    **anon / publishable key** kopieren. Den *service_role / secret key* niemals verwenden.

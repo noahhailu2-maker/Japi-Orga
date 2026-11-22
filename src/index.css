@@ -65,3 +65,19 @@ button, a, input { touch-action: manipulation; }
 @keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(.94); } 100% { transform: scale(1); } }
 .animate-pop { animation: pop .25s ease-out; }
+
+/* ---------- Japi-Animation ---------- */
+.japi .ear-l, .japi .ear-r, .japi .eyes, .japi .tongue { transform-box: fill-box; }
+.japi .ear-l { transform-origin: 80% 8%; animation: ear-l 4.2s ease-in-out infinite; }
+.japi .ear-r { transform-origin: 20% 8%; animation: ear-r 4.2s ease-in-out infinite; }
+.japi .eyes  { transform-origin: 50% 50%; animation: blink 5s infinite; }
+.japi .tongue { transform-origin: 50% 0%; animation: pant .9s ease-in-out infinite; }
+.japi-happy .ear-l, .japi-happy .ear-r { animation-duration: .6s; }
+.japi-happy .tongue { animation-duration: .35s; }
+.japi-tilt { animation: tilt .9s ease-in-out; }
+@keyframes ear-l { 0%, 70%, 100% { transform: rotate(0); } 78% { transform: rotate(7deg); } 86% { transform: rotate(-3deg); } }
+@keyframes ear-r { 0%, 72%, 100% { transform: rotate(0); } 80% { transform: rotate(-7deg); } 88% { transform: rotate(3deg); } }
+@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes pant { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.09); } }
+@keyframes tilt { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-12deg); } 70% { transform: rotate(4deg); } }
+@media (prefers-reduced-motion: reduce) { .japi * { animation: none !important; } }

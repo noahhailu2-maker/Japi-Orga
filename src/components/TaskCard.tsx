@@ -28,7 +28,7 @@ export function TaskCard({ task, todayLogs, members, onTap, busy }: Props) {
         </span>
         <span className="mt-0.5 block truncate text-[15px] text-muted">
           {last
-            ? <>{clock(last.done_at)} · {who ? `${who.emoji} ${who.display_name}` : 'jemand'}</>
+            ? <>{clock(last.done_at)} · {who ? `${who.emoji} ${who.display_name}` : 'jemand'}{last.choice ? ` · ${last.choice}` : ''}</>
             : goal === 0 ? 'Nach Bedarf' : 'Heute noch nicht'}
         </span>
         {goal > 1 && (
